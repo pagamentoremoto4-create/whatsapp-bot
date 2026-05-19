@@ -1,58 +1,77 @@
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
+const makeWASocket = require("@whiskeysockets/baileys").default;
+const { useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode-terminal");
 const axios = require("axios");
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+    const { state, saveCreds } = await useMultiFileAuthState("auth");
 
-  const sock = makeWASocket({
-    auth: state
-  });
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+    });
 
-  sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", (update) => {
-    const { qr, connection } = update;
+    // 🔥 CONEXÃO + QR CODE
+    sock.ev.on("connection.update", (update) => {
+        const { connection, qr } = update;
 
-    if (qr) {
-      console.log("📲 ESCANEIE O QR:");
-      qrcode.generate(qr, { small: true });
-    }
+        if (qr) {
+            console.log("📱 Escaneie o QR abaixo:");
+            qrcode.generate(qr, { small: true });
+        }
 
-    if (connection === "open") {
-      console.log("✅ WhatsApp conectado!");
-    }
-  });
+        if (connection === "open") {
+            console.log("✅ Conectado ao WhatsApp!");
+        }
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    const msg = messages[0];
+        if (connection === "close") {
+            console.log("❌ Conexão fechada...");
+        }
+    });
 
-    if (!msg.message) return;
+    // 💬 RECEBER MENSAGENS
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+        const msg = messages[0];
 
-    const texto = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        if (!msg.message) return;
 
-    if (!texto) return;
+        const texto =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text;
 
-    if (texto.toLowerCase().includes("pagar")) {
-      try {
-        const resposta = await axios.get("https://pix-api-z6a5.onrender.com/pix");
+        if (!texto) return;
 
-        const pix = resposta.data.copiaecola;
+        const from = msg.key.remoteJid;
 
-        await sock.sendMessage(msg.key.remoteJid, {
-          text: `💰 Pagamento: R$50
+        console.log("Mensagem:", texto);
 
-📲 PIX Copia e Cola:
-${pix}
+        // 🔥 COMANDO PAGAR
+        if (texto.toLowerCase().startsWith("pagar")) {
+            const valor = texto.split(" ")[1] || "50";
 
-⚡ Após o pagamento, envio automático!`
-        });
+            try {
+                const resposta = await axios.post(
+                    "https://pix-api-z6a5.onrender.com/pix",
+                    {
+                        valor: Number(valor),
+                    }
+                );
 
-      } catch (erro) {
-        console.log("Erro ao gerar PIX", erro);
-      }
-    }
-  });
+                const pix = resposta.data.copiaecola;
+
+                await sock.sendMessage(from, {
+                    text: `💰 Pagamento de R$${valor}\n\n🔑 PIX Copia e Cola:\n${pix}\n\n📲 Pague e aguarde confirmação!`,
+                });
+            } catch (err) {
+                console.log(err);
+                await sock.sendMessage(from, {
+                    text: "❌ Erro ao gerar PIX",
+                });
+            }
+        }
+    });
 }
 
 startBot();
