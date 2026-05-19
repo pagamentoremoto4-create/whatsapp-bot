@@ -15,11 +15,12 @@ async function startBot() {
     const { qr, connection } = update;
 
     if (qr) {
+      console.log("📲 ESCANEIE O QR:");
       qrcode.generate(qr, { small: true });
     }
 
     if (connection === "open") {
-      console.log("🤖 WhatsApp conectado!");
+      console.log("✅ WhatsApp conectado!");
     }
   });
 
@@ -48,7 +49,7 @@ ${pix}
         });
 
       } catch (erro) {
-        console.log(erro);
+        console.log("Erro ao gerar PIX", erro);
       }
     }
   });
